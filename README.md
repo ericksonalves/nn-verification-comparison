@@ -40,3 +40,9 @@ cd ..
 cd check_properties
 make
 ```
+
+### Runner
+
+```
+g++ <runner.cpp> -std=c++17 -lstdc++fs
+```
