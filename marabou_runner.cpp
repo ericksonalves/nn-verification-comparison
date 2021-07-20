@@ -9,7 +9,7 @@
 #include <vector>
 
 #define BUFFER_SIZE 128
-#define TOOL_PATH "./build/Marabou" // update binary executable path
+#define TOOL_PATH "./marabou/build/Marabou" // update binary executable path
 #define PIPE_READ_MODE "r"
 
 const std::vector<std::string> tool_args{"./marabou/resources/nnet/acasxu/ACASXU_experimental_v2a_2_7.nnet"};
