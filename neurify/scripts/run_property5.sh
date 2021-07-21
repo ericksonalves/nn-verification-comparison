@@ -1,1 +1,1 @@
-./network_test 5 ./nnet/ACASXU_run2a_1_1_batch_2000.nnet 4
+./reluval/network_test 5 ./reluval/nnet/ACASXU_run2a_1_1_batch_2000.nnet 4
