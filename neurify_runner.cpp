@@ -1,11 +1,16 @@
+#include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #define BUFFER_SIZE 128
@@ -62,51 +67,175 @@ find_files_matching_extension(const std::string &path,
   return files;
 }
 
-void verify_benchmark(const std::string &benchmark) {
-  std::cout << "[START] verification task: " << benchmark << std::endl;
-
-  auto begin = std::chrono::steady_clock::now();
-
-  std::string command = build_tool_command(benchmark);
-
-  std::cout << command << std::endl;
-
-  std::vector<std::string> output = execute_command(command);
-
-  auto end = std::chrono::steady_clock::now();
-
-  auto elapsed_time =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
-          .count();
-
-  std::cout << "[STATUS] elapsed: " << elapsed_time << "ms" << std::endl;
-
-  std::cout << "[STATUS] building verification log" << std::endl;
-
-  std::experimental::filesystem::path path = benchmark;
-
-  path.replace_extension(".log");
-
-  std::ofstream log;
-  log.open(path.string().c_str());
-
-  for (const std::string &data : output) {
-    log << data << std::endl;
+class benchmark_executor
+{
+public:
+  benchmark_executor(const size_t& parallel_executions)
+    : m_parallel_executions(parallel_executions)
+      ,
+      m_finished(false)
+  {
   }
 
-  log.close();
+  ~benchmark_executor()
+  {
+  }
 
-  std::cout << "[FINISH] verification task: " << benchmark << std::endl;
-}
+  void add_benchmark(const std::string& benchmark)
+  {
+    m_benchmarks.push(benchmark);
+  }
+
+  void start()
+  {
+    m_stdout_thread = std::thread(
+      &benchmark_executor::m_stdout_worker, this);
+
+    while (!m_benchmarks.empty())
+    {
+      size_t size = m_benchmarks.size();
+
+      size_t max = size <= m_parallel_executions ?
+             size :
+             m_parallel_executions;
+
+      for (size_t i = 0; i < max; i++)
+      {
+        std::string benchmark = m_benchmarks.front();
+        m_benchmarks.pop();
+
+        m_benchmark_threads.push_back(std::thread(
+          &benchmark_executor::m_benchmark_worker, this, benchmark
+        ));
+      }
+
+      for (std::thread& benchmark_thread : m_benchmark_threads)
+      {
+        benchmark_thread.join();
+      }
+
+      m_benchmark_threads.clear();
+    }
+
+    m_finished = true;
+
+    m_stdout_thread.join();
+  }
+
+private:
+  size_t m_parallel_executions;
+
+  std::atomic<bool> m_finished;
+
+  std::mutex m_stdout_mutex;
+
+  std::queue<std::string> m_benchmarks;
+
+  std::queue<std::string> m_stdout_queue;
+
+  std::thread m_stdout_thread;
+
+  std::vector<std::thread> m_benchmark_threads;
+
+  void m_add_stdout_message(const std::string& message)
+  {
+    m_stdout_mutex.lock();
+    m_stdout_queue.push(message);
+    m_stdout_mutex.unlock();
+  }
+
+  void m_benchmark_worker(const std::string& benchmark)
+  {
+    std::stringstream str_stream;
+
+    str_stream << "[START] verification task: " << benchmark;
+
+    m_add_stdout_message(str_stream.str());
+
+    str_stream.str(std::string());
+
+    auto begin = std::chrono::steady_clock::now();
+
+    std::string command = build_tool_command(benchmark);
+
+    str_stream << command;
+
+    m_add_stdout_message(str_stream.str());
+
+    str_stream.str(std::string());
+
+    std::vector<std::string> output = execute_command(command);
+
+    auto end = std::chrono::steady_clock::now();
+
+    auto elapsed_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
+        .count();
+
+    str_stream << "[STATUS] " << benchmark << " elapsed: " << elapsed_time << "ms";
+
+    m_add_stdout_message(str_stream.str());
+
+    str_stream.str(std::string());
+
+    str_stream << "[STATUS] " << benchmark << " building verification log";
+
+    m_add_stdout_message(str_stream.str());
+
+    str_stream.str(std::string());
+
+    std::experimental::filesystem::path path = benchmark;
+
+    path.replace_extension(".log");
+
+    std::ofstream log;
+    log.open(path.string().c_str());
+
+    for (const std::string &data : output) {
+      log << data << std::endl;
+    }
+
+    log.close();
+
+    str_stream << "[FINISH] verification task: " << benchmark;
+
+    m_add_stdout_message(str_stream.str());
+  }
+
+  void m_stdout_worker()
+  {
+    while (!m_finished.load())
+    {
+      std::string message;
+
+      m_stdout_mutex.lock();
+      if (!m_stdout_queue.empty())
+      {
+        message = m_stdout_queue.front();
+        m_stdout_queue.pop();
+      }
+      m_stdout_mutex.unlock();
+
+      if (!message.empty())
+      {
+        std::cout << message << std::endl;
+      }
+    }
+  }
+};
 
 int main(int argc, const char *argv[]) {
   std::cout << "benchmark runner v0.1" << std::endl;
 
   auto benchmarks = find_files_matching_extension("./neurify/scripts/", ".sh");
 
+  benchmark_executor executor(5);
+
   for (const auto &benchmark : benchmarks) {
-    verify_benchmark(benchmark);
+    executor.add_benchmark(benchmark);
   }
+
+  executor.start();
 
   std::cout << "finished" << std::endl;
 

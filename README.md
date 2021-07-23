@@ -44,5 +44,5 @@ make
 ### Runner
 
 ```
-g++ <runner.cpp> -std=c++17 -lstdc++fs
+g++ <runner.cpp> -std=c++17 -lstdc++fs -lpthread
 ```
