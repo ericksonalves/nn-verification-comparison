@@ -1,1 +1,1 @@
-./reluval/network_test 10 ./reluval/nnet/ACASXU_run2a_4_5_batch_2000.nnet 0
+./neurify/network_test 10 ./neurify/nnet/ACASXU_run2a_4_5_batch_2000.nnet 0
