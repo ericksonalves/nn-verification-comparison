@@ -949,7 +949,7 @@ int split_interval(struct NNet *nnet, struct Interval *input,\
                                     depth, feature_range2,
                                     feature_range_length2, split_feature
                                 };
-
+        // start the first thread
         pthread_create(&workers1, NULL, direct_run_check_thread, &args1);
 
     pthread_mutex_lock(&lock);
@@ -959,8 +959,16 @@ int split_interval(struct NNet *nnet, struct Interval *input,\
 
     pthread_mutex_unlock(&lock);
 
-        //printf ( "pid1: %ld start %d \n", syscall(SYS_gettid), count);
+        // wait for the first thread to finish before starting the second
+        pthread_join(workers1, NULL);
 
+    pthread_mutex_lock(&lock);
+
+        count--;
+
+    pthread_mutex_unlock(&lock);
+
+        // start the second thread
         pthread_create(&workers2, NULL, direct_run_check_thread, &args2);
 
     pthread_mutex_lock(&lock);
@@ -970,27 +978,14 @@ int split_interval(struct NNet *nnet, struct Interval *input,\
 
     pthread_mutex_unlock(&lock);
 
-        //printf ( "pid2: %ld start %d \n", syscall(SYS_gettid), count);
-
-        pthread_join(workers1, NULL);
-
-    pthread_mutex_lock(&lock);
-
-        count--;
-
-    pthread_mutex_unlock(&lock);
-
-        //printf ( "pid1: %ld done %d\n",syscall(SYS_gettid), count);
-
+        // wait for the second thread to finish
         pthread_join(workers2, NULL);
-    
+
     pthread_mutex_lock(&lock);
 
         count--;
 
     pthread_mutex_unlock(&lock);
-
-        //printf ( "pid2: %ld done %d\n", syscall(SYS_gettid), count);
 
         if (depth == 11) {
 
